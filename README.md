@@ -51,6 +51,33 @@ npm start
 
 The site opens at `http://localhost:3000`. The React development server proxies `/api` calls to Spring Boot.
 
+## Deploying the website on Vercel
+
+Vercel hosts the React frontend only. The Java/Spring Boot API and MySQL database must be deployed separately; without that API, registration, login, and every saved feature will fail.
+
+1. Deploy the `backend` directory to a Docker-capable Java host (for example, Render, Railway, Fly.io, or a VPS) using [backend/Dockerfile](backend/Dockerfile).
+2. Provision a MySQL 8 database and set these backend environment variables:
+
+   ```text
+   DB_URL=jdbc:mysql://YOUR_MYSQL_HOST:3306/ai_content_detector?useSSL=true&serverTimezone=UTC
+   DB_USERNAME=YOUR_DATABASE_USER
+   DB_PASSWORD=YOUR_DATABASE_PASSWORD
+   JWT_SECRET=use-a-long-random-secret-of-at-least-32-characters
+   CORS_ALLOWED_ORIGINS=https://wordwise-content.vercel.app,http://localhost:3000
+   FRONTEND_URL=https://wordwise-content.vercel.app
+   ```
+
+3. Confirm the deployed backend responds at `https://YOUR-BACKEND-URL/api/health` with `{"status":"ok","service":"wordwise-api"}`.
+4. In Vercel, open the frontend project, go to **Settings → Environment Variables**, and add this production variable:
+
+   ```text
+   REACT_APP_API_URL=https://YOUR-BACKEND-URL/api
+   ```
+
+5. Redeploy the Vercel project. Create React App reads `REACT_APP_*` variables during the build, so simply saving the variable is not enough.
+
+The frontend includes `.env.example` with the same variable name. Do not place database passwords or API keys in Vercel frontend variables.
+
 ## Demo flow
 
 1. Register a user. All accounts start as `USER` with a `FREE` plan.

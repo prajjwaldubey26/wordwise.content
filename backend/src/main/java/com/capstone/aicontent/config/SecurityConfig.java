@@ -25,18 +25,18 @@ import java.util.List;
 @EnableMethodSecurity
 public class SecurityConfig {
     private final JwtAuthenticationFilter jwtFilter;
-    private final String allowedOrigin;
-    public SecurityConfig(JwtAuthenticationFilter jwtFilter, @Value("${app.cors.allowed-origin}") String allowedOrigin) { this.jwtFilter = jwtFilter; this.allowedOrigin = allowedOrigin; }
+    private final String allowedOrigins;
+    public SecurityConfig(JwtAuthenticationFilter jwtFilter, @Value("${app.cors.allowed-origins}") String allowedOrigins) { this.jwtFilter = jwtFilter; this.allowedOrigins = allowedOrigins; }
     @Bean SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         return http.csrf(AbstractHttpConfigurer::disable).cors(c -> c.configurationSource(corsConfigurationSource()))
                 .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-                .authorizeHttpRequests(a -> a.requestMatchers("/api/auth/**").permitAll().requestMatchers(HttpMethod.OPTIONS, "/**").permitAll().anyRequest().authenticated())
+                .authorizeHttpRequests(a -> a.requestMatchers("/api/auth/**", "/api/health").permitAll().requestMatchers(HttpMethod.OPTIONS, "/**").permitAll().anyRequest().authenticated())
                 .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class).build();
     }
     @Bean PasswordEncoder passwordEncoder() { return new BCryptPasswordEncoder(); }
     @Bean RestTemplate restTemplate() { return new RestTemplate(); }
     @Bean CorsConfigurationSource corsConfigurationSource() {
-        CorsConfiguration config = new CorsConfiguration(); config.setAllowedOrigins(List.of(allowedOrigin)); config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS")); config.setAllowedHeaders(List.of("Authorization", "Content-Type"));
+        CorsConfiguration config = new CorsConfiguration(); config.setAllowedOrigins(List.of(allowedOrigins.split(",")).stream().map(String::trim).filter(value -> !value.isBlank()).toList()); config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS")); config.setAllowedHeaders(List.of("Authorization", "Content-Type"));
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource(); source.registerCorsConfiguration("/**", config); return source;
     }
 }
