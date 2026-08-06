@@ -78,6 +78,10 @@ Vercel hosts the React frontend only. The Java/Spring Boot API and MySQL databas
 
 The frontend includes `.env.example` with the same variable name. Do not place database passwords or API keys in Vercel frontend variables.
 
+### Temporary ngrok backend
+
+For a temporary demo tunnel, `frontend/.env.production` is configured to use `https://lavender-follicle-talisman.ngrok-free.dev/api`. The frontend adds ngrok's skip-warning header automatically. Restart the Spring Boot backend after pulling these changes so its CORS configuration allows `https://wordwise-content.vercel.app`, then rebuild/redeploy Vercel. ngrok free URLs can expire or change when the tunnel restarts; update `REACT_APP_API_URL` whenever that happens.
+
 ## Demo flow
 
 1. Register a user. All accounts start as `USER` with a `FREE` plan.

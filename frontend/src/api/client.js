@@ -3,11 +3,13 @@ import axios from 'axios';
 const configuredApiUrl = process.env.REACT_APP_API_URL?.trim().replace(/\/+$/, '');
 const apiBaseUrl = configuredApiUrl || '/api';
 const isProductionBuild = process.env.NODE_ENV === 'production';
+const usesNgrok = configuredApiUrl?.includes('.ngrok-free.dev');
 
 const client = axios.create({ baseURL: apiBaseUrl });
 client.interceptors.request.use((config) => {
   const token = localStorage.getItem('token');
   if (token) config.headers.Authorization = `Bearer ${token}`;
+  if (usesNgrok) config.headers['ngrok-skip-browser-warning'] = 'true';
   return config;
 });
 client.interceptors.response.use((response) => response, (error) => {

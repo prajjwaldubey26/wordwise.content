@@ -36,7 +36,7 @@ public class SecurityConfig {
     @Bean PasswordEncoder passwordEncoder() { return new BCryptPasswordEncoder(); }
     @Bean RestTemplate restTemplate() { return new RestTemplate(); }
     @Bean CorsConfigurationSource corsConfigurationSource() {
-        CorsConfiguration config = new CorsConfiguration(); config.setAllowedOrigins(List.of(allowedOrigins.split(",")).stream().map(String::trim).filter(value -> !value.isBlank()).toList()); config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS")); config.setAllowedHeaders(List.of("Authorization", "Content-Type"));
+        CorsConfiguration config = new CorsConfiguration(); config.setAllowedOrigins(List.of(allowedOrigins.split(",")).stream().map(String::trim).filter(value -> !value.isBlank()).toList()); config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS")); config.setAllowedHeaders(List.of("Authorization", "Content-Type", "ngrok-skip-browser-warning"));
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource(); source.registerCorsConfiguration("/**", config); return source;
     }
 }
