@@ -1,0 +1,12 @@
+import { useState } from 'react';
+import { Alert, Button, Card, Table } from 'react-bootstrap';
+import client, { errorMessage } from '../api/client';
+import PageIntro from '../components/PageIntro';
+
+export default function PlagiarismChecker() {
+  const [text, setText] = useState(''); const [result, setResult] = useState(null); const [busy, setBusy] = useState(false); const [error, setError] = useState('');
+  const submit = async (event) => { event.preventDefault(); setBusy(true); setError(''); try { const { data } = await client.post('/plagiarism/check', { text }); setResult(data); } catch (err) { setError(errorMessage(err)); } finally { setBusy(false); } };
+  const tone = result?.score < 25 ? 'original' : result?.score < 60 ? 'overlap' : 'risk';
+  return <><PageIntro eyebrow="LOCAL ORIGINALITY CHECK" title="Know what’s already been said.">This checker runs locally against every earlier draft, chapter summary, and document in your own growing workspace.</PageIntro><Card className="tool-card"><Card.Body className="p-4"><form onSubmit={submit}><textarea className="form-control checker-input" rows="9" placeholder="Paste a document with at least five words…" value={text} onChange={(e) => setText(e.target.value)} maxLength="50000" required /><div className="d-flex justify-content-between align-items-center mt-3"><span className="small text-muted">{text.trim() ? text.trim().split(/\s+/).length : 0} words</span><Button className="primary-button" type="submit" disabled={busy}>{busy ? 'Comparing…' : 'Check originality'}</Button></div></form>{error && <Alert className="mt-3 mb-0" variant="danger">{error}</Alert>}</Card.Body></Card>
+  {result && <Card className={`result-card ${tone} mt-4`}><Card.Body className="p-4 p-md-5"><div className="score-layout"><div className="score-circle"><strong>{result.score}%</strong><span>similarity</span></div><div><p className="eyebrow">SCAN COMPLETE</p><h2>{result.verdict}</h2><p>Your score combines Jaccard set overlap and cosine similarity across five-word phrases.</p></div></div>{result.matches.length > 0 ? <><h3 className="mt-5">Closest matching sources</h3><Table responsive className="match-table"><thead><tr><th>Source</th><th className="text-end">Similarity</th></tr></thead><tbody>{result.matches.map((match) => <tr key={`${match.label}-${match.id}`}><td>{match.label}</td><td className="text-end fw-bold">{match.score}%</td></tr>)}</tbody></Table></> : <div className="no-matches">No overlapping 5-word sequences were found in your saved corpus.</div>}</Card.Body></Card>}</>;
+}

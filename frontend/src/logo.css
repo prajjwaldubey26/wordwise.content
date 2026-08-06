@@ -1,0 +1,13 @@
+.brand-mark { display: inline-flex; align-items: center; gap: 7px; }
+
+.logo-mark {
+  display: block;
+  width: 1.45em;
+  height: 1.45em;
+  color: currentColor;
+}
+
+.nav-logo { width: 1.22em; height: 1.22em; color: #2e6a5d; }
+.action-icon .logo-mark { width: 24px; height: 24px; }
+.empty-state > span .logo-mark, .auth-logo .logo-mark { width: 29px; height: 29px; }
+.empty-inline .logo-mark { width: 30px; height: 30px; margin: 0 auto; }
