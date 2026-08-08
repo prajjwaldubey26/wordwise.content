@@ -4,7 +4,6 @@ import com.capstone.aicontent.dto.ChatDtos.*;
 import com.capstone.aicontent.service.ChatService;
 import com.capstone.aicontent.service.CurrentUserService;
 import jakarta.validation.Valid;
-import org.springframework.http.MediaType;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
@@ -58,7 +57,7 @@ public class ChatController {
         chat.delete(current.get(auth), id);
     }
 
-    @PostMapping(value = "/conversations/{id}/messages", consumes = MediaType.APPLICATION_JSON_VALUE)
+    @PostMapping("/conversations/{id}/messages")
     public ConversationDetailResponse sendJson(
             Authentication auth,
             @PathVariable Long id,
@@ -66,7 +65,7 @@ public class ChatController {
         return chat.send(current.get(auth), id, request);
     }
 
-    @PostMapping(value = "/conversations/{id}/messages", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PostMapping("/conversations/{id}/upload")
     public ConversationDetailResponse sendMultipart(
             Authentication auth,
             @PathVariable Long id,

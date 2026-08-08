@@ -203,9 +203,8 @@ export default function Chat() {
         form.append('content', content);
         form.append('file', attached);
         const response = await client.post(
-          `/chat/conversations/${conversationId}/messages`,
-          form,
-          { headers: { 'Content-Type': 'multipart/form-data' } }
+          `/chat/conversations/${conversationId}/upload`,
+          form
         );
         data = response.data;
       } else {
