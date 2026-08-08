@@ -10,6 +10,7 @@ import com.capstone.aicontent.repository.ChatConversationRepository;
 import com.capstone.aicontent.repository.ChatMessageRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.time.Instant;
 import java.util.List;
@@ -26,14 +27,17 @@ public class ChatService {
     private final ChatConversationRepository conversations;
     private final ChatMessageRepository messages;
     private final AiGenerationService ai;
+    private final ChatFileService files;
 
     public ChatService(
             ChatConversationRepository conversations,
             ChatMessageRepository messages,
-            AiGenerationService ai) {
+            AiGenerationService ai,
+            ChatFileService files) {
         this.conversations = conversations;
         this.messages = messages;
         this.ai = ai;
+        this.files = files;
     }
 
     public List<ChatModelOption> models() {
@@ -101,20 +105,47 @@ public class ChatService {
             User user,
             Long id,
             SendMessageRequest request) {
+        return send(user, id, request == null ? null : request.content(), null);
+    }
+
+    @Transactional
+    public ConversationDetailResponse send(
+            User user,
+            Long id,
+            String content,
+            MultipartFile file) {
         ChatConversation conversation = requireOwned(user, id);
-        String content = request.content().trim();
-        if (content.isBlank()) {
-            throw new BadRequestException("Message cannot be empty.");
+        String question = content == null ? "" : content.trim();
+        boolean hasFile = file != null && !file.isEmpty();
+
+        if (question.isBlank() && !hasFile) {
+            throw new BadRequestException("Type a message or attach a PDF/image.");
+        }
+        if (question.isBlank()) {
+            question = "Please read this file and explain the important points.";
+        }
+
+        String storedContent = question;
+        if (hasFile) {
+            ChatFileService.FileContext context = files.read(file, conversation.getModel());
+            String label = "pdf".equals(context.kind()) ? "PDF" : "Image";
+            storedContent = "📎 " + context.filename() + " (" + label + ")\n\n"
+                    + question
+                    + "\n\n--- Begin attached " + context.kind() + " ---\n"
+                    + context.extractedText()
+                    + "\n--- End attached " + context.kind() + " ---";
         }
 
         ChatMessage userMessage = new ChatMessage();
         userMessage.setConversation(conversation);
         userMessage.setRole("user");
-        userMessage.setContent(content);
+        userMessage.setContent(storedContent);
         messages.save(userMessage);
 
         if ("New chat".equals(conversation.getTitle())) {
-            conversation.setTitle(titleFrom(content));
+            conversation.setTitle(titleFrom(hasFile
+                    ? (file.getOriginalFilename() == null ? question : file.getOriginalFilename() + " · " + question)
+                    : question));
         }
 
         List<ChatMessage> history =

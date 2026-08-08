@@ -13,6 +13,8 @@ import org.springframework.web.client.RestTemplate;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Base64;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -146,6 +148,129 @@ public String chat(List<Map<String, String>> messages, String preferredModel) {
         return mockChatReply(lastUser);
     }
     return response.trim();
+}
+
+public String describeImage(byte[] imageBytes, String mimeType, String preferredModel) {
+    if (imageBytes == null || imageBytes.length == 0) {
+        return "An empty image was uploaded.";
+    }
+    String selected = preferredModel == null || preferredModel.isBlank()
+            ? provider
+            : preferredModel.toLowerCase(Locale.ROOT);
+    String mediaType = mimeType == null || mimeType.isBlank() ? "image/jpeg" : mimeType;
+    String dataUrl = "data:" + mediaType + ";base64," + Base64.getEncoder().encodeToString(imageBytes);
+    String prompt = "Describe this image in clear detail. Include any visible text (OCR), objects, layout, and useful context so another assistant can answer questions about it.";
+
+    try {
+        String result = switch (selected) {
+            case "openai" -> openAiKey.isBlank() ? null : callOpenAiVision(
+                    prompt,
+                    dataUrl,
+                    openAiKey,
+                    openAiModel,
+                    "https://api.openai.com/v1/chat/completions"
+            );
+            case "nvidia" -> nvidiaKey.isBlank() ? null : callOpenAiVision(
+                    prompt,
+                    dataUrl,
+                    nvidiaKey,
+                    nvidiaModel,
+                    "https://integrate.api.nvidia.com/v1/chat/completions"
+            );
+            case "anthropic" -> anthropicKey.isBlank() ? null : callAnthropicVision(prompt, imageBytes, mediaType);
+            default -> null;
+        };
+        if (result != null && !result.isBlank()) {
+            return result.trim();
+        }
+    } catch (Exception e) {
+        System.out.println("Image description failed: " + e.getMessage());
+    }
+    return "An image was attached (" + mediaType + "). Visible details could not be extracted automatically; "
+            + "answer using the user's question and ask for clarification if needed.";
+}
+
+@SuppressWarnings("unchecked")
+private String callOpenAiVision(
+        String prompt,
+        String dataUrl,
+        String apiKey,
+        String model,
+        String endpoint) {
+    HttpHeaders headers = new HttpHeaders();
+    headers.setBearerAuth(apiKey);
+    headers.setContentType(MediaType.APPLICATION_JSON);
+
+    List<Map<String, Object>> content = new ArrayList<>();
+    content.add(Map.of("type", "text", "text", prompt));
+    Map<String, Object> imageUrl = new HashMap<>();
+    imageUrl.put("url", dataUrl);
+    content.add(Map.of("type", "image_url", "image_url", imageUrl));
+
+    Map<String, Object> message = new HashMap<>();
+    message.put("role", "user");
+    message.put("content", content);
+
+    Map<String, Object> body = new HashMap<>();
+    body.put("model", model);
+    body.put("messages", List.of(message));
+    body.put("temperature", 0.2);
+    body.put("max_tokens", 900);
+
+    Map<String, Object> response = http.postForObject(
+            endpoint,
+            new HttpEntity<>(body, headers),
+            Map.class
+    );
+
+    if (response == null) {
+        return null;
+    }
+    List<Map<String, Object>> choices = (List<Map<String, Object>>) response.get("choices");
+    if (choices == null || choices.isEmpty()) {
+        return null;
+    }
+    Map<String, Object> msg = (Map<String, Object>) choices.get(0).get("message");
+    return msg == null ? null : (String) msg.get("content");
+}
+
+@SuppressWarnings("unchecked")
+private String callAnthropicVision(String prompt, byte[] imageBytes, String mediaType) {
+    HttpHeaders headers = new HttpHeaders();
+    headers.set("x-api-key", anthropicKey);
+    headers.set("anthropic-version", "2023-06-01");
+    headers.setContentType(MediaType.APPLICATION_JSON);
+
+    String base64 = Base64.getEncoder().encodeToString(imageBytes);
+    List<Map<String, Object>> content = new ArrayList<>();
+    Map<String, Object> imageBlock = new HashMap<>();
+    imageBlock.put("type", "image");
+    imageBlock.put("source", Map.of(
+            "type", "base64",
+            "media_type", mediaType,
+            "data", base64
+    ));
+    content.add(imageBlock);
+    content.add(Map.of("type", "text", "text", prompt));
+
+    Map<String, Object> body = new HashMap<>();
+    body.put("model", anthropicModel);
+    body.put("max_tokens", 900);
+    body.put("messages", List.of(Map.of("role", "user", "content", content)));
+
+    Map<String, Object> response = http.postForObject(
+            "https://api.anthropic.com/v1/messages",
+            new HttpEntity<>(body, headers),
+            Map.class
+    );
+    if (response == null) {
+        return null;
+    }
+    List<Map<String, Object>> blocks = (List<Map<String, Object>>) response.get("content");
+    if (blocks == null || blocks.isEmpty()) {
+        return null;
+    }
+    return (String) blocks.get(0).get("text");
 }
 
 public List<Map<String, Object>> availableChatModels() {
