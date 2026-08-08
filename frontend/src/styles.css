@@ -44,7 +44,15 @@ a { color:#236356; } a:hover { color:#db755e; }
 .chat-bubble-row.user { justify-content:flex-end; }
 .chat-bubble-row.assistant { justify-content:flex-start; }
 .chat-bubble { width:min(720px,100%); padding:14px 16px; border-radius:14px; }
-.chat-bubble-row.user .chat-bubble { background:#d7ebd4; color:#163d36; border-bottom-right-radius:4px; }
+.chat-bubble-row.user .chat-bubble,
+.chat-bubble-row.user .chat-bubble.thinking {
+  background:#c5e8c0 !important;
+  color:#163d36 !important;
+  border:1px solid #9ccf96;
+  border-bottom-right-radius:4px;
+}
+.chat-bubble-row.user .chat-bubble-role,
+.chat-bubble-row.user .chat-bubble-time { color:#3f6b5a; opacity:1; }
 .chat-bubble-row.assistant .chat-bubble { background:#fff; border:1px solid var(--line); border-bottom-left-radius:4px; }
 .chat-bubble.thinking { opacity:.8; }
 .chat-bubble-role { font-size:.68rem; font-weight:800; letter-spacing:.08em; text-transform:uppercase; margin-bottom:6px; opacity:.7; }
