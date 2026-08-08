@@ -135,87 +135,109 @@ public List<QuizQuestion> quiz(String extractedText) {
     return mockQuiz(extractedText);
 }
 
+public String chat(List<Map<String, String>> messages, String preferredModel) {
+    String response = callProvider(messages, preferredModel);
+    if (response == null || response.isBlank()) {
+        String lastUser = messages.stream()
+                .filter(m -> "user".equalsIgnoreCase(m.get("role")))
+                .reduce((a, b) -> b)
+                .map(m -> m.get("content"))
+                .orElse("your question");
+        return mockChatReply(lastUser);
+    }
+    return response.trim();
+}
+
+public List<Map<String, Object>> availableChatModels() {
+    List<Map<String, Object>> models = new ArrayList<>();
+    models.add(Map.of("id", "mock", "label", "Demo (offline)", "available", true));
+    models.add(Map.of("id", "nvidia", "label", "NVIDIA", "available", !nvidiaKey.isBlank()));
+    models.add(Map.of("id", "openai", "label", "ChatGPT (OpenAI)", "available", !openAiKey.isBlank()));
+    models.add(Map.of("id", "anthropic", "label", "Claude (Anthropic)", "available", !anthropicKey.isBlank()));
+    return models;
+}
+
+public String defaultChatModel() {
+    if (!nvidiaKey.isBlank() && "nvidia".equals(provider)) return "nvidia";
+    if (!openAiKey.isBlank() && "openai".equals(provider)) return "openai";
+    if (!anthropicKey.isBlank() && "anthropic".equals(provider)) return "anthropic";
+    if (!nvidiaKey.isBlank()) return "nvidia";
+    if (!openAiKey.isBlank()) return "openai";
+    if (!anthropicKey.isBlank()) return "anthropic";
+    return "mock";
+}
+
 private String callProvider(String prompt) {
+    return callProvider(List.of(Map.of("role", "user", "content", prompt)), null);
+}
+
+private String callProvider(List<Map<String, String>> messages, String preferredModel) {
+    String selected = preferredModel == null || preferredModel.isBlank()
+            ? provider
+            : preferredModel.toLowerCase(Locale.ROOT);
 
     try {
-
-        return switch (provider) {
-
+        return switch (selected) {
             case "openai" ->
                     openAiKey.isBlank()
                             ? null
                             : callOpenAiCompatible(
-                                    prompt,
+                                    messages,
                                     openAiKey,
                                     openAiModel,
                                     "https://api.openai.com/v1/chat/completions"
                             );
-
             case "nvidia" ->
                     nvidiaKey.isBlank()
                             ? null
                             : callOpenAiCompatible(
-                                    prompt,
+                                    messages,
                                     nvidiaKey,
                                     nvidiaModel,
                                     "https://integrate.api.nvidia.com/v1/chat/completions"
                             );
-
             case "anthropic" ->
                     anthropicKey.isBlank()
                             ? null
-                            : callAnthropic(prompt);
-
+                            : callAnthropic(messages);
             default -> null;
         };
-
     } catch (Exception e) {
-
-        System.out.println(
-                "AI provider failed: " + e.getMessage()
-        );
-
+        System.out.println("AI provider failed: " + e.getMessage());
         return null;
     }
 }
 
 @SuppressWarnings("unchecked")
 private String callOpenAiCompatible(
-        String prompt,
+        List<Map<String, String>> messages,
         String apiKey,
         String model,
         String endpoint) {
 
     HttpHeaders headers = new HttpHeaders();
-
     headers.setBearerAuth(apiKey);
     headers.setContentType(MediaType.APPLICATION_JSON);
 
-    Map<String, Object> body =
-            Map.of(
-                    "model",
-                    model,
-                    "messages",
-                    List.of(
-                            Map.of(
-                                    "role",
-                                    "user",
-                                    "content",
-                                    prompt
-                            )
-                    ),
-                    "temperature",
-                    0.55,
-                    "max_tokens",
-                    1024
-            );
+    List<Map<String, String>> payloadMessages = messages.stream()
+            .map(m -> Map.of(
+                    "role", m.getOrDefault("role", "user"),
+                    "content", m.getOrDefault("content", "")
+            ))
+            .toList();
 
-    Map<String, Object> response =
-            http.postForObject(
-                    endpoint,
-                    new HttpEntity<>(body, headers),
-                    Map.class
-            );
+    Map<String, Object> body = Map.of(
+            "model", model,
+            "messages", payloadMessages,
+            "temperature", 0.55,
+            "max_tokens", 1024
+    );
+
+    Map<String, Object> response = http.postForObject(
+            endpoint,
+            new HttpEntity<>(body, headers),
+            Map.class
+    );
 
     if (response == null) {
         return null;
@@ -239,40 +261,35 @@ private String callOpenAiCompatible(
 }
 
 @SuppressWarnings("unchecked")
-private String callAnthropic(String prompt) {
+private String callAnthropic(List<Map<String, String>> messages) {
 
     HttpHeaders headers = new HttpHeaders();
-
     headers.set("x-api-key", anthropicKey);
-    headers.set(
-            "anthropic-version",
-            "2023-06-01"
-    );
+    headers.set("anthropic-version", "2023-06-01");
     headers.setContentType(MediaType.APPLICATION_JSON);
 
-    Map<String, Object> body =
-            Map.of(
-                    "model",
-                    anthropicModel,
-                    "max_tokens",
-                    1400,
-                    "messages",
-                    List.of(
-                            Map.of(
-                                    "role",
-                                    "user",
-                                    "content",
-                                    prompt
-                            )
-                    )
-            );
+    List<Map<String, String>> payloadMessages = messages.stream()
+            .filter(m -> {
+                String role = m.getOrDefault("role", "user");
+                return "user".equals(role) || "assistant".equals(role);
+            })
+            .map(m -> Map.of(
+                    "role", m.get("role"),
+                    "content", m.getOrDefault("content", "")
+            ))
+            .toList();
 
-    Map<String, Object> response =
-            http.postForObject(
-                    "https://api.anthropic.com/v1/messages",
-                    new HttpEntity<>(body, headers),
-                    Map.class
-            );
+    Map<String, Object> body = Map.of(
+            "model", anthropicModel,
+            "max_tokens", 1400,
+            "messages", payloadMessages
+    );
+
+    Map<String, Object> response = http.postForObject(
+            "https://api.anthropic.com/v1/messages",
+            new HttpEntity<>(body, headers),
+            Map.class
+    );
 
     if (response == null) {
         return null;
@@ -286,6 +303,20 @@ private String callAnthropic(String prompt) {
     }
 
     return (String) content.get(0).get("text");
+}
+
+private String mockChatReply(String question) {
+    String topic = question == null || question.isBlank() ? "that" : question.trim();
+    if (topic.length() > 120) {
+        topic = topic.substring(0, 117) + "...";
+    }
+    return "Here's a clear take on \"" + topic + "\".\n\n"
+            + "The short answer is that it depends on your goal, but a good approach is to start with the basics, "
+            + "then build up with a few practical steps.\n\n"
+            + "1. Clarify what you want to achieve.\n"
+            + "2. Break the problem into smaller parts.\n"
+            + "3. Use one simple example to check your understanding.\n\n"
+            + "If you want, ask a follow-up and I can go deeper on any part.";
 }
 
 private List<QuizQuestion> parseQuiz(String json) {
