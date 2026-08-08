@@ -27,6 +27,8 @@ private final String openAiKey;
 private final String openAiModel;
 private final String anthropicKey;
 private final String anthropicModel;
+private final String nvidiaKey;
+private final String nvidiaModel;
 
 private final RestTemplate http;
 private final ObjectMapper mapper;
@@ -37,6 +39,8 @@ public AiGenerationService(
         @Value("${ai.openai.model:gpt-4o-mini}") String openAiModel,
         @Value("${ai.anthropic.api-key:}") String anthropicKey,
         @Value("${ai.anthropic.model:claude-3-5-haiku-latest}") String anthropicModel,
+        @Value("${ai.nvidia.api-key:}") String nvidiaKey,
+        @Value("${ai.nvidia.model:meta/llama-3.1-8b-instruct}") String nvidiaModel,
         RestTemplate http,
         ObjectMapper mapper) {
 
@@ -45,6 +49,8 @@ public AiGenerationService(
     this.openAiModel = openAiModel;
     this.anthropicKey = anthropicKey;
     this.anthropicModel = anthropicModel;
+    this.nvidiaKey = nvidiaKey;
+    this.nvidiaModel = nvidiaModel;
     this.http = http;
     this.mapper = mapper;
 }
@@ -138,7 +144,22 @@ private String callProvider(String prompt) {
             case "openai" ->
                     openAiKey.isBlank()
                             ? null
-                            : callOpenAi(prompt);
+                            : callOpenAiCompatible(
+                                    prompt,
+                                    openAiKey,
+                                    openAiModel,
+                                    "https://api.openai.com/v1/chat/completions"
+                            );
+
+            case "nvidia" ->
+                    nvidiaKey.isBlank()
+                            ? null
+                            : callOpenAiCompatible(
+                                    prompt,
+                                    nvidiaKey,
+                                    nvidiaModel,
+                                    "https://integrate.api.nvidia.com/v1/chat/completions"
+                            );
 
             case "anthropic" ->
                     anthropicKey.isBlank()
@@ -159,17 +180,21 @@ private String callProvider(String prompt) {
 }
 
 @SuppressWarnings("unchecked")
-private String callOpenAi(String prompt) {
+private String callOpenAiCompatible(
+        String prompt,
+        String apiKey,
+        String model,
+        String endpoint) {
 
     HttpHeaders headers = new HttpHeaders();
 
-    headers.setBearerAuth(openAiKey);
+    headers.setBearerAuth(apiKey);
     headers.setContentType(MediaType.APPLICATION_JSON);
 
     Map<String, Object> body =
             Map.of(
                     "model",
-                    openAiModel,
+                    model,
                     "messages",
                     List.of(
                             Map.of(
@@ -180,12 +205,14 @@ private String callOpenAi(String prompt) {
                             )
                     ),
                     "temperature",
-                    0.55
+                    0.55,
+                    "max_tokens",
+                    1024
             );
 
     Map<String, Object> response =
             http.postForObject(
-                    "https://api.openai.com/v1/chat/completions",
+                    endpoint,
                     new HttpEntity<>(body, headers),
                     Map.class
             );
