@@ -44,7 +44,7 @@ a { color:#236356; } a:hover { color:#db755e; }
 .chat-bubble-row.user { justify-content:flex-end; }
 .chat-bubble-row.assistant { justify-content:flex-start; }
 .chat-bubble { width:min(720px,100%); padding:14px 16px; border-radius:14px; }
-.chat-bubble-row.user .chat-bubble { background:#163d36; color:#fffef9; border-bottom-right-radius:4px; }
+.chat-bubble-row.user .chat-bubble { background:#d7ebd4; color:#163d36; border-bottom-right-radius:4px; }
 .chat-bubble-row.assistant .chat-bubble { background:#fff; border:1px solid var(--line); border-bottom-left-radius:4px; }
 .chat-bubble.thinking { opacity:.8; }
 .chat-bubble-role { font-size:.68rem; font-weight:800; letter-spacing:.08em; text-transform:uppercase; margin-bottom:6px; opacity:.7; }
