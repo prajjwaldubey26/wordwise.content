@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Button, Form, Spinner } from 'react-bootstrap';
 import client, { errorMessage } from '../api/client';
 
@@ -18,11 +18,26 @@ export default function Chat() {
   const bottomRef = useRef(null);
   const textareaRef = useRef(null);
 
-  const loadConversations = async () => {
+  const loadConversations = useCallback(async () => {
     const { data } = await client.get('/chat/conversations');
     setConversations(data);
     return data;
-  };
+  }, []);
+
+  const openConversation = useCallback(async (id) => {
+    setLoadingChat(true);
+    setError('');
+    try {
+      const { data } = await client.get(`/chat/conversations/${id}`);
+      setActiveId(id);
+      setActive(data);
+      setSelectedModel((current) => data.model || current);
+    } catch (err) {
+      setError(errorMessage(err));
+    } finally {
+      setLoadingChat(false);
+    }
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -51,26 +66,11 @@ export default function Chat() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [loadConversations, openConversation]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
   }, [active?.messages, busy]);
-
-  const openConversation = async (id) => {
-    setLoadingChat(true);
-    setError('');
-    try {
-      const { data } = await client.get(`/chat/conversations/${id}`);
-      setActiveId(id);
-      setActive(data);
-      setSelectedModel(data.model || selectedModel);
-    } catch (err) {
-      setError(errorMessage(err));
-    } finally {
-      setLoadingChat(false);
-    }
-  };
 
   const startNewChat = async () => {
     setBusy(true);
