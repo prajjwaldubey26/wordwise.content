@@ -1,8 +1,7 @@
-import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom';
-import { Container } from 'react-bootstrap';
+import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import ProtectedRoute from './components/ProtectedRoute';
-import AppNavbar from './components/AppNavbar';
+import AppShell from './components/AppShell';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import Dashboard from './pages/Dashboard';
@@ -16,36 +15,21 @@ import PaymentSuccess from './pages/PaymentSuccess';
 import Reports from './pages/Reports';
 
 function PrivateLayout() {
-  const { pathname } = useLocation();
-  const isChat = pathname.startsWith('/chat');
-
   return (
-    <>
-      <AppNavbar />
-      <main className={`main-content${isChat ? ' main-content-chat' : ''}`}>
-        {isChat ? (
-          <div className="chat-page">
-            <Routes>
-              <Route path="/chat" element={<Chat />} />
-            </Routes>
-          </div>
-        ) : (
-          <Container>
-            <Routes>
-              <Route path="/dashboard" element={<Dashboard />} />
-              <Route path="/generate" element={<ContentGenerator />} />
-              <Route path="/chapters" element={<ChapterSummaryQuiz />} />
-              <Route path="/plagiarism" element={<PlagiarismChecker />} />
-              <Route path="/history" element={<History />} />
-              <Route path="/pricing" element={<Pricing />} />
-              <Route path="/payment-success" element={<PaymentSuccess />} />
-              <Route path="/reports" element={<Reports />} />
-              <Route path="*" element={<Navigate to="/dashboard" replace />} />
-            </Routes>
-          </Container>
-        )}
-      </main>
-    </>
+    <AppShell>
+      <Routes>
+        <Route path="/dashboard" element={<Dashboard />} />
+        <Route path="/chat" element={<Chat />} />
+        <Route path="/generate" element={<ContentGenerator />} />
+        <Route path="/chapters" element={<ChapterSummaryQuiz />} />
+        <Route path="/plagiarism" element={<PlagiarismChecker />} />
+        <Route path="/history" element={<History />} />
+        <Route path="/pricing" element={<Pricing />} />
+        <Route path="/payment-success" element={<PaymentSuccess />} />
+        <Route path="/reports" element={<Reports />} />
+        <Route path="*" element={<Navigate to="/dashboard" replace />} />
+      </Routes>
+    </AppShell>
   );
 }
 
