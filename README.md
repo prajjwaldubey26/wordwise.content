@@ -8,7 +8,7 @@ A full-stack college capstone app for creating AI-assisted content, summarizing 
 - Backend: Java 17, Spring Boot 3.2, Spring Security, Spring Data JPA, Validation, Maven, PDFBox
 - Database: MySQL 8
 - Authentication: BCrypt password hashing and stateless JWTs
-- Payments: Stripe Checkout in test mode
+- Payments: Razorpay Checkout in test mode
 
 ## Run locally
 
@@ -115,16 +115,19 @@ $env:ANTHROPIC_MODEL = "claude-3-5-haiku-latest"
 
 If a configured cloud call fails or its key is missing, the backend automatically falls back to the mock provider. For quiz generation, malformed provider JSON is retried once with a stricter instruction before the mock quiz fallback runs.
 
-## Stripe test mode
+## Razorpay test mode
 
-Create a test secret key at [Stripe Dashboard](https://dashboard.stripe.com/test/apikeys), then set it before starting the backend:
+Create test API keys at [Razorpay Dashboard → API Keys](https://dashboard.razorpay.com/app/keys), then set them before starting the backend:
 
 ```powershell
-$env:STRIPE_SECRET_KEY = "sk_test_..."
+$env:RAZORPAY_KEY_ID = "rzp_test_..."
+$env:RAZORPAY_KEY_SECRET = "your_test_secret"
 $env:FRONTEND_URL = "http://localhost:3000"
 ```
 
-The Pricing page creates a Stripe Checkout Session for the `$9.99` demo plan. After a paid test session returns to the site, `/api/payments/confirm` validates it, creates `payments` and `subscriptions` records, and upgrades the account to `PRO`.
+The Pricing page creates a Razorpay order for the `₹499` Pro demo plan, opens Razorpay Checkout, then calls `/api/payments/confirm` with `orderId`, `paymentId`, and `signature`. The backend verifies the signature, creates `payments` and `subscriptions` records, and upgrades the account to `PRO`.
+
+Use Razorpay test cards (for example `4111 1111 1111 1111`) from their docs while in test mode.
 
 ## Plagiarism algorithm, in plain English
 
@@ -157,8 +160,8 @@ The upload endpoint accepts only PDFs up to 10 MB. PDFBox (`Loader` + `PDFTextSt
 | GET | `/api/plagiarism/history` | User | Check history |
 | GET | `/api/dashboard` | User | Personal totals and average similarity |
 | GET | `/api/reports/admin` | Admin | Platform-wide metrics |
-| POST | `/api/payments/create-checkout-session` | User | Create Stripe Checkout URL |
-| POST | `/api/payments/confirm?sessionId=...` | User | Confirm payment and activate Pro |
+| POST | `/api/payments/create-order` | User | Create Razorpay order |
+| POST | `/api/payments/confirm` | User | Verify Razorpay signature and activate Pro |
 
 Protected calls require `Authorization: Bearer <jwt>`.
 

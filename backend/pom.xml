@@ -17,7 +17,7 @@
         <java.version>17</java.version>
         <jjwt.version>0.12.5</jjwt.version>
         <pdfbox.version>3.0.2</pdfbox.version>
-        <stripe.version>24.16.0</stripe.version>
+        <razorpay.version>1.4.8</razorpay.version>
     </properties>
     <dependencies>
         <dependency>
@@ -64,9 +64,9 @@
             <scope>runtime</scope>
         </dependency>
         <dependency>
-            <groupId>com.stripe</groupId>
-            <artifactId>stripe-java</artifactId>
-            <version>${stripe.version}</version>
+            <groupId>com.razorpay</groupId>
+            <artifactId>razorpay-java</artifactId>
+            <version>${razorpay.version}</version>
         </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
