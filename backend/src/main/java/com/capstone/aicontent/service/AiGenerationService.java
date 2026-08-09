@@ -64,7 +64,10 @@ public String generate(GenerationRequest request) {
                     + " word " + request.contentType()
                     + " in a " + request.tone()
                     + " tone about: " + request.prompt()
-                    + ". Return only the final writing.";
+                    + ". Return only the final writing as plain text. "
+                    + "Start with a clear title on the first line, then an optional short subtitle on the next line, "
+                    + "then a blank line, then the body paragraphs. "
+                    + "Do not use Markdown. Do not use asterisks, hashtags, backticks, or bold/italic markers.";
 
     String response = callProvider(instruction);
 
@@ -77,7 +80,7 @@ public String generate(GenerationRequest request) {
         );
     }
 
-    return response.trim();
+    return stripMarkdownMarkers(response.trim());
 }
 
 public String summarize(String extractedText, int targetWords) {
@@ -546,7 +549,9 @@ private String mockContent(
             };
 
     StringBuilder result =
-            new StringBuilder(opening)
+            new StringBuilder(topic)
+                    .append("\n\n")
+                    .append(opening)
                     .append("\n\n");
 
     int index = 0;
@@ -685,6 +690,20 @@ private String clip(
     return text.length() <= max
             ? text
             : text.substring(0, max);
+}
+
+/** Removes common Markdown markers so drafts show clean titles instead of **asterisks**. */
+private String stripMarkdownMarkers(String text) {
+    if (text == null || text.isBlank()) {
+        return text;
+    }
+    String cleaned = text.replace("\r\n", "\n");
+    cleaned = cleaned.replaceAll("(?m)^#{1,6}\\s+", "");
+    cleaned = cleaned.replaceAll("\\*\\*(.+?)\\*\\*", "$1");
+    cleaned = cleaned.replaceAll("__(.+?)__", "$1");
+    cleaned = cleaned.replaceAll("(?m)^\\*\\s+", "");
+    cleaned = cleaned.replaceAll("`([^`]+)`", "$1");
+    return cleaned.trim();
 }
 
 private int wordCount(

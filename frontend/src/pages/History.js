@@ -4,6 +4,7 @@ import client from '../api/client';
 import SoftCard from '../components/ui/SoftCard';
 import TypePill from '../components/ui/TypePill';
 import LogoMark from '../components/LogoMark';
+import FormattedContent from '../components/FormattedContent';
 
 const formatDate = (value) => (value ? new Date(value).toLocaleString() : '');
 
@@ -212,7 +213,7 @@ export default function History() {
             </Modal.Header>
             <Modal.Body>
               <p className="small text-muted mb-3">{formatDate(selected.date)}</p>
-              <article className="generated-text history-detail-text">{selected.body}</article>
+              <FormattedContent className="history-detail-text" content={selected.body} />
             </Modal.Body>
             <Modal.Footer>
               <Button variant="outline-secondary" onClick={() => setSelected(null)}>

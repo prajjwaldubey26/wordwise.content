@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Button, Form, Spinner } from 'react-bootstrap';
 import client, { errorMessage } from '../api/client';
+import FormattedContent from '../components/FormattedContent';
 
 const formatTime = (value) => (value ? new Date(value).toLocaleString() : '');
 
@@ -338,7 +339,13 @@ export default function Chat() {
                         {parsed.attachment.kind === 'PDF' ? '📄' : '🖼️'} {parsed.attachment.name}
                       </div>
                     )}
-                    <div className="chat-bubble-text">{parsed.text}</div>
+                    <div className="chat-bubble-text">
+                      {message.role === 'assistant' ? (
+                        <FormattedContent content={parsed.text} />
+                      ) : (
+                        parsed.text
+                      )}
+                    </div>
                     {message.createdAt && (
                       <div className="chat-bubble-time">{formatTime(message.createdAt)}</div>
                     )}
