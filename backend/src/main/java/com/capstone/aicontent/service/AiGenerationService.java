@@ -156,7 +156,7 @@ public String chat(List<Map<String, String>> messages, String preferredModel) {
             ? defaultChatModel()
             : preferredModel.toLowerCase(Locale.ROOT);
 
-    // "mock" is offline demo only — use a live model automatically when a key exists.
+    // Only auto-upgrade away from mock when the user left demo mode selected.
     if ("mock".equals(selected)) {
         String live = firstAvailableLiveModel(null);
         if (live != null) {
@@ -164,23 +164,50 @@ public String chat(List<Map<String, String>> messages, String preferredModel) {
         }
     }
 
-    String response = callProvider(withSystem, selected);
-    if (response == null || response.isBlank()) {
-        String fallbackModel = firstAvailableLiveModel(selected);
-        if (fallbackModel != null && !fallbackModel.equals(selected)) {
-            response = callProvider(withSystem, fallbackModel);
-        }
+    ProviderResult primary = callProviderDetailed(withSystem, selected);
+    if (primary.content() != null && !primary.content().isBlank()) {
+        return stripMarkdownMarkers(primary.content().trim());
     }
-    if (response == null || response.isBlank()) {
-        String lastUser = messages.stream()
-                .filter(m -> "user".equalsIgnoreCase(m.get("role")))
-                .reduce((a, b) -> b)
-                .map(m -> m.get("content"))
-                .orElse("your question");
-        return mockChatReply(lastUser);
+
+    // If a live model was chosen, never hide failures behind generic mock text.
+    if (!"mock".equals(selected)) {
+        String detail = primary.error() == null || primary.error().isBlank()
+                ? "No response was returned."
+                : primary.error();
+        return "I couldn't reach " + labelForModel(selected) + " just now.\n\n"
+                + detail + "\n\n"
+                + "Check that the API key is set on Render ("
+                + envHintForModel(selected)
+                + "), redeploy the backend, then start a New chat and try again.";
     }
-    return stripMarkdownMarkers(response.trim());
+
+    String lastUser = messages.stream()
+            .filter(m -> "user".equalsIgnoreCase(m.get("role")))
+            .reduce((a, b) -> b)
+            .map(m -> m.get("content"))
+            .orElse("your question");
+    return mockChatReply(lastUser);
 }
+
+private String labelForModel(String model) {
+    return switch (model) {
+        case "openai" -> "ChatGPT (OpenAI)";
+        case "nvidia" -> "NVIDIA";
+        case "anthropic" -> "Claude (Anthropic)";
+        default -> model;
+    };
+}
+
+private String envHintForModel(String model) {
+    return switch (model) {
+        case "openai" -> "OPENAI_API_KEY";
+        case "nvidia" -> "NVIDIA_API_KEY";
+        case "anthropic" -> "ANTHROPIC_API_KEY";
+        default -> "the provider API key";
+    };
+}
+
+private record ProviderResult(String content, String error) {}
 
 private List<Map<String, String>> withChatSystemPrompt(List<Map<String, String>> messages) {
     List<Map<String, String>> payload = new ArrayList<>();
@@ -361,43 +388,61 @@ public String defaultChatModel() {
 }
 
 private String callProvider(String prompt) {
-    return callProvider(List.of(Map.of("role", "user", "content", prompt)), null);
+    return callProviderDetailed(List.of(Map.of("role", "user", "content", prompt)), null).content();
 }
 
 private String callProvider(List<Map<String, String>> messages, String preferredModel) {
+    return callProviderDetailed(messages, preferredModel).content();
+}
+
+private ProviderResult callProviderDetailed(List<Map<String, String>> messages, String preferredModel) {
     String selected = preferredModel == null || preferredModel.isBlank()
             ? provider
             : preferredModel.toLowerCase(Locale.ROOT);
 
     try {
         return switch (selected) {
-            case "openai" ->
-                    openAiKey.isBlank()
-                            ? null
-                            : callOpenAiCompatible(
-                                    messages,
-                                    openAiKey,
-                                    openAiModel,
-                                    "https://api.openai.com/v1/chat/completions"
-                            );
-            case "nvidia" ->
-                    nvidiaKey.isBlank()
-                            ? null
-                            : callOpenAiCompatible(
-                                    messages,
-                                    nvidiaKey,
-                                    nvidiaModel,
-                                    "https://integrate.api.nvidia.com/v1/chat/completions"
-                            );
-            case "anthropic" ->
-                    anthropicKey.isBlank()
-                            ? null
-                            : callAnthropic(messages);
-            default -> null;
+            case "openai" -> {
+                if (openAiKey.isBlank()) {
+                    yield new ProviderResult(null, "OPENAI_API_KEY is missing on the server.");
+                }
+                yield new ProviderResult(callOpenAiCompatible(
+                        messages,
+                        openAiKey,
+                        openAiModel,
+                        "https://api.openai.com/v1/chat/completions"
+                ), null);
+            }
+            case "nvidia" -> {
+                if (nvidiaKey.isBlank()) {
+                    yield new ProviderResult(null, "NVIDIA_API_KEY is missing on the server.");
+                }
+                yield new ProviderResult(callOpenAiCompatible(
+                        messages,
+                        nvidiaKey,
+                        nvidiaModel,
+                        "https://integrate.api.nvidia.com/v1/chat/completions"
+                ), null);
+            }
+            case "anthropic" -> {
+                if (anthropicKey.isBlank()) {
+                    yield new ProviderResult(null, "ANTHROPIC_API_KEY is missing on the server.");
+                }
+                yield new ProviderResult(callAnthropic(messages), null);
+            }
+            default -> new ProviderResult(null, "Demo mode does not call a live model.");
         };
+    } catch (org.springframework.web.client.HttpStatusCodeException e) {
+        String body = e.getResponseBodyAsString();
+        String snippet = body == null || body.isBlank()
+                ? e.getStatusText()
+                : body.substring(0, Math.min(240, body.length()));
+        System.out.println("AI provider HTTP error: " + e.getStatusCode() + " " + snippet);
+        return new ProviderResult(null,
+                "Provider returned HTTP " + e.getStatusCode().value() + ": " + snippet);
     } catch (Exception e) {
         System.out.println("AI provider failed: " + e.getMessage());
-        return null;
+        return new ProviderResult(null, "Provider error: " + e.getMessage());
     }
 }
 
@@ -513,6 +558,12 @@ private String mockChatReply(String question) {
     String topic = raw.isBlank() ? "your question" : raw;
     if (topic.length() > 160) {
         topic = topic.substring(0, 157) + "...";
+    }
+
+    if (lower.matches("^(hi+|hii+|hello|hey|yo|sup|good (morning|afternoon|evening))[!?\\.]*$")) {
+        return "Hi! I'm WordWise.\n\n"
+                + "I can help you write drafts, explain topics, summarize PDFs, or check originality ideas.\n\n"
+                + "What would you like to work on?";
     }
 
     if (lower.contains("--- begin attached")) {
