@@ -105,7 +105,13 @@ public class ChatService {
             User user,
             Long id,
             SendMessageRequest request) {
-        return send(user, id, request == null ? null : request.content(), null);
+        return send(
+                user,
+                id,
+                request == null ? null : request.content(),
+                request == null ? null : request.model(),
+                null
+        );
     }
 
     @Transactional
@@ -114,7 +120,21 @@ public class ChatService {
             Long id,
             String content,
             MultipartFile file) {
+        return send(user, id, content, null, file);
+    }
+
+    @Transactional
+    public ConversationDetailResponse send(
+            User user,
+            Long id,
+            String content,
+            String modelOverride,
+            MultipartFile file) {
         ChatConversation conversation = requireOwned(user, id);
+        if (modelOverride != null && !modelOverride.isBlank()) {
+            conversation.setModel(normalizeModel(modelOverride));
+            conversations.save(conversation);
+        }
         String question = content == null ? "" : content.trim();
         boolean hasFile = file != null && !file.isEmpty();
 

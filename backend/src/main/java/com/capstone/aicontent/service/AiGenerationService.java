@@ -56,15 +56,37 @@ public AiGenerationService(
         RestTemplate http,
         ObjectMapper mapper) {
 
-    this.provider = provider.toLowerCase(Locale.ROOT);
-    this.openAiKey = openAiKey;
-    this.openAiModel = openAiModel;
-    this.anthropicKey = anthropicKey;
-    this.anthropicModel = anthropicModel;
-    this.nvidiaKey = nvidiaKey;
-    this.nvidiaModel = nvidiaModel;
+    this.provider = provider == null ? "mock" : provider.trim().toLowerCase(Locale.ROOT);
+    this.openAiKey = sanitizeSecret(openAiKey);
+    this.openAiModel = sanitizeValue(openAiModel, "gpt-4o-mini");
+    this.anthropicKey = sanitizeSecret(anthropicKey);
+    this.anthropicModel = sanitizeValue(anthropicModel, "claude-3-5-haiku-latest");
+    this.nvidiaKey = sanitizeSecret(nvidiaKey);
+    this.nvidiaModel = sanitizeValue(nvidiaModel, "meta/llama-3.1-8b-instruct");
     this.http = http;
     this.mapper = mapper;
+    System.out.println("AI startup: provider=" + this.provider
+            + " openaiKey=" + (!this.openAiKey.isBlank())
+            + " openaiLen=" + this.openAiKey.length()
+            + " openaiModel=" + this.openAiModel
+            + " nvidiaKey=" + (!this.nvidiaKey.isBlank())
+            + " anthropicKey=" + (!this.anthropicKey.isBlank()));
+}
+
+private static String sanitizeSecret(String value) {
+    if (value == null) return "";
+    String cleaned = value.trim();
+    // Remove accidental quotes from env paste.
+    if ((cleaned.startsWith("\"") && cleaned.endsWith("\""))
+            || (cleaned.startsWith("'") && cleaned.endsWith("'"))) {
+        cleaned = cleaned.substring(1, cleaned.length() - 1).trim();
+    }
+    return cleaned;
+}
+
+private static String sanitizeValue(String value, String fallback) {
+    String cleaned = sanitizeSecret(value);
+    return cleaned.isBlank() ? fallback : cleaned;
 }
 
 public String generate(GenerationRequest request) {
@@ -232,6 +254,10 @@ private String firstAvailableLiveModel(String preferredModel) {
     if (!preferred.isBlank() && !"mock".equals(preferred)) {
         order.add(preferred);
     }
+    // Honor AI_PROVIDER as the preferred default when both keys exist.
+    if (!provider.isBlank() && !"mock".equals(provider) && !order.contains(provider)) {
+        order.add(provider);
+    }
     for (String candidate : List.of("openai", "nvidia", "anthropic")) {
         if (!order.contains(candidate)) {
             order.add(candidate);
@@ -370,10 +396,13 @@ private String callAnthropicVision(String prompt, byte[] imageBytes, String medi
 
 public List<Map<String, Object>> availableChatModels() {
     List<Map<String, Object>> models = new ArrayList<>();
+    boolean openAiReady = !openAiKey.isBlank();
+    boolean nvidiaReady = !nvidiaKey.isBlank();
+    boolean anthropicReady = !anthropicKey.isBlank();
+    models.add(Map.of("id", "openai", "label", "ChatGPT (OpenAI)", "available", openAiReady));
+    models.add(Map.of("id", "nvidia", "label", "NVIDIA Llama", "available", nvidiaReady));
+    models.add(Map.of("id", "anthropic", "label", "Claude (Anthropic)", "available", anthropicReady));
     models.add(Map.of("id", "mock", "label", "Demo (offline)", "available", true));
-    models.add(Map.of("id", "openai", "label", "ChatGPT (OpenAI)", "available", !openAiKey.isBlank()));
-    models.add(Map.of("id", "nvidia", "label", "NVIDIA Llama", "available", !nvidiaKey.isBlank()));
-    models.add(Map.of("id", "anthropic", "label", "Claude (Anthropic)", "available", !anthropicKey.isBlank()));
     return models;
 }
 

@@ -260,11 +260,15 @@ export default function Chat() {
       if (attached) {
         const form = new FormData();
         form.append('content', content);
+        form.append('model', selectedModel);
         form.append('file', attached);
         const response = await client.post(`/chat/conversations/${conversationId}/upload`, form);
         data = response.data;
       } else {
-        const response = await client.post(`/chat/conversations/${conversationId}/messages`, { content });
+        const response = await client.post(`/chat/conversations/${conversationId}/messages`, {
+          content,
+          model: selectedModel,
+        });
         data = response.data;
       }
 

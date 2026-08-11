@@ -70,7 +70,8 @@ public class ChatController {
             Authentication auth,
             @PathVariable Long id,
             @RequestParam(value = "content", required = false) String content,
+            @RequestParam(value = "model", required = false) String model,
             @RequestParam(value = "file", required = false) MultipartFile file) {
-        return chat.send(current.get(auth), id, content, file);
+        return chat.send(current.get(auth), id, content, model, file);
     }
 }

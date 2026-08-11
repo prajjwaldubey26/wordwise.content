@@ -18,7 +18,9 @@ public final class ChatDtos {
     ) {}
 
     public record SendMessageRequest(
-            @NotBlank @Size(max = 8000) String content
+            @NotBlank @Size(max = 8000) String content,
+            @Pattern(regexp = "mock|openai|nvidia|anthropic", message = "model must be mock, openai, nvidia, or anthropic")
+            String model
     ) {}
 
     public record UpdateConversationRequest(
