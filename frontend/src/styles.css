@@ -264,7 +264,13 @@ a:hover { color: var(--deep); }
   transition: background 0.15s ease, color 0.15s ease, transform 0.15s ease;
 }
 
-.bottom-nav-item span.icon { font-size: 1.15rem; line-height: 1; }
+.bottom-nav-item span.icon { font-size: 1.15rem; line-height: 1; display: grid; place-items: center; }
+.bottom-nav-item .bottom-nav-logo {
+  width: 1.15rem;
+  height: 1.15rem;
+  color: currentColor;
+}
+.bottom-nav-item.active .bottom-nav-logo { color: #fff; }
 
 .bottom-nav-item:hover { color: var(--ink); }
 .bottom-nav-item:active { transform: scale(0.97); }
@@ -832,6 +838,11 @@ a:hover { color: var(--deep); }
 .progress-bar { background: var(--accent); border-radius: 999px; }
 
 .checker-input { resize: vertical; min-height: 220px; line-height: 1.6; }
+.plagiarism-upload-btn {
+  min-height: var(--tap);
+  border-radius: 14px !important;
+  font-weight: 600;
+}
 .score-layout { display: flex; align-items: center; gap: 27px; }
 .score-circle {
   flex: 0 0 118px;

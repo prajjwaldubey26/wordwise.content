@@ -1,17 +1,45 @@
 package com.capstone.aicontent.controller;
 
-import com.capstone.aicontent.dto.*;
+import com.capstone.aicontent.dto.PlagiarismRequest;
+import com.capstone.aicontent.dto.PlagiarismResponse;
 import com.capstone.aicontent.service.CurrentUserService;
 import com.capstone.aicontent.service.PlagiarismService;
 import jakarta.validation.Valid;
+import org.springframework.http.MediaType;
 import org.springframework.security.core.Authentication;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
+
 import java.util.List;
 
-@RestController @RequestMapping("/api/plagiarism")
+@RestController
+@RequestMapping("/api/plagiarism")
 public class PlagiarismController {
-    private final PlagiarismService plagiarism; private final CurrentUserService current;
-    public PlagiarismController(PlagiarismService plagiarism, CurrentUserService current) { this.plagiarism = plagiarism; this.current = current; }
-    @PostMapping("/check") public PlagiarismResponse check(Authentication auth, @Valid @RequestBody PlagiarismRequest request) { return plagiarism.check(current.get(auth), request.text()); }
-    @GetMapping("/history") public List<PlagiarismResponse> history(Authentication auth) { return plagiarism.history(current.get(auth)); }
+    private final PlagiarismService plagiarism;
+    private final CurrentUserService current;
+
+    public PlagiarismController(PlagiarismService plagiarism, CurrentUserService current) {
+        this.plagiarism = plagiarism;
+        this.current = current;
+    }
+
+    @PostMapping("/check")
+    public PlagiarismResponse check(Authentication auth, @Valid @RequestBody PlagiarismRequest request) {
+        return plagiarism.check(current.get(auth), request.text());
+    }
+
+    @PostMapping(value = "/check-upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public PlagiarismResponse checkUpload(Authentication auth, @RequestParam("file") MultipartFile file) {
+        return plagiarism.checkFromPdf(current.get(auth), file);
+    }
+
+    @GetMapping("/history")
+    public List<PlagiarismResponse> history(Authentication auth) {
+        return plagiarism.history(current.get(auth));
+    }
 }

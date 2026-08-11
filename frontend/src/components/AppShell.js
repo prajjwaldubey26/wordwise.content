@@ -17,11 +17,11 @@ const DRAWER_LINKS = [
 ];
 
 const BOTTOM_LINKS = [
-  { to: '/dashboard', label: 'Home', icon: '⌂' },
-  { to: '/chat', label: 'Chat', icon: '◎' },
-  { to: '/generate', label: 'Create', icon: '✦' },
-  { to: '/history', label: 'History', icon: '▤' },
-  { to: '/reports', label: 'Reports', icon: '◈' },
+  { to: '/dashboard', label: 'Home', icon: '⌂', logo: false },
+  { to: '/chat', label: 'Chat', icon: '◎', logo: false },
+  { to: '/generate', label: 'Create', icon: null, logo: true },
+  { to: '/history', label: 'History', icon: '▤', logo: false },
+  { to: '/reports', label: 'Reports', icon: '◈', logo: false },
 ];
 
 function initials(name = '') {
@@ -200,7 +200,7 @@ export default function AppShell({ children }) {
             className={({ isActive }) => `bottom-nav-item${isActive ? ' active' : ''}`}
           >
             <span className="icon" aria-hidden="true">
-              {link.icon}
+              {link.logo ? <LogoMark className="bottom-nav-logo" /> : link.icon}
             </span>
             {link.label}
           </NavLink>

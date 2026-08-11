@@ -13,6 +13,7 @@ import com.capstone.aicontent.repository.PlagiarismCheckRepository;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Service;
+import org.springframework.web.multipart.MultipartFile;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -24,8 +25,26 @@ import java.util.Set;
 /** Offline plagiarism comparison using 5-word shingles, Jaccard similarity, and cosine similarity. */
 @Service
 public class PlagiarismService {
-    private final PlagiarismCheckRepository checks; private final ContentGenerationRepository generations; private final ChapterSummaryRepository summaries; private final ObjectMapper mapper;
-    public PlagiarismService(PlagiarismCheckRepository checks, ContentGenerationRepository generations, ChapterSummaryRepository summaries, ObjectMapper mapper) { this.checks = checks; this.generations = generations; this.summaries = summaries; this.mapper = mapper; }
+    private final PlagiarismCheckRepository checks;
+    private final ContentGenerationRepository generations;
+    private final ChapterSummaryRepository summaries;
+    private final ObjectMapper mapper;
+    private final ChatFileService files;
+
+    public PlagiarismService(
+            PlagiarismCheckRepository checks,
+            ContentGenerationRepository generations,
+            ChapterSummaryRepository summaries,
+            ObjectMapper mapper,
+            ChatFileService files
+    ) {
+        this.checks = checks;
+        this.generations = generations;
+        this.summaries = summaries;
+        this.mapper = mapper;
+        this.files = files;
+    }
+
     public PlagiarismResponse check(User user, String text) {
         List<String> submitted = shingles(text);
         if (submitted.isEmpty()) throw new BadRequestException("Please submit at least five words so we can compare 5-word phrases.");
@@ -42,6 +61,22 @@ public class PlagiarismService {
             item = checks.save(item); return new PlagiarismResponse(item.getId(), score, verdict, top, item.getCreatedAt());
         } catch (Exception e) { throw new BadRequestException("Could not save this plagiarism check."); }
     }
+
+    public PlagiarismResponse checkFromPdf(User user, MultipartFile file) {
+        ChatFileService.FileContext context = files.read(file, null);
+        if (!"pdf".equals(context.kind())) {
+            throw new BadRequestException("Only PDF files are supported for originality upload.");
+        }
+        String text = context.extractedText();
+        if (text == null || text.isBlank()) {
+            throw new BadRequestException("No readable text was found in that PDF.");
+        }
+        if (text.length() > 50000) {
+            text = text.substring(0, 50000);
+        }
+        return check(user, text);
+    }
+
     public List<PlagiarismResponse> history(User user) {
         return checks.findByUserIdOrderByCreatedAtDesc(user.getId()).stream().map(item -> new PlagiarismResponse(item.getId(), item.getSimilarityScore(), verdict(item.getSimilarityScore()), parseMatches(item.getMatchedSources()), item.getCreatedAt())).toList();
     }
