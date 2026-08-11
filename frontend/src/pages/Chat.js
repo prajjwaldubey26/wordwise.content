@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Button, Form, Spinner } from 'react-bootstrap';
+import { Form, Spinner } from 'react-bootstrap';
+import { Link } from 'react-router-dom';
 import client, { errorMessage } from '../api/client';
 import FormattedContent from '../components/FormattedContent';
+import { useAuth } from '../context/AuthContext';
 
 const formatTime = (value) => (value ? new Date(value).toLocaleString() : '');
 
@@ -12,6 +14,12 @@ const ALLOWED_TYPES = [
   'image/jpg',
   'image/webp',
   'image/gif',
+];
+
+const SUGGESTIONS = [
+  { label: 'Create a draft', prompt: 'Write a short blog draft about building better study habits' },
+  { label: 'Write or edit', prompt: 'Help me rewrite this more clearly and warmly: ' },
+  { label: 'Summarize a PDF', prompt: 'I will upload a PDF — please summarize the key points' },
 ];
 
 function parseMessageContent(content) {
@@ -27,7 +35,15 @@ function parseMessageContent(content) {
   };
 }
 
+function initials(name = '') {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (!parts.length) return 'WW';
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
+}
+
 export default function Chat() {
+  const { user } = useAuth();
   const [conversations, setConversations] = useState([]);
   const [models, setModels] = useState([]);
   const [activeId, setActiveId] = useState(null);
@@ -39,9 +55,12 @@ export default function Chat() {
   const [loadingChat, setLoadingChat] = useState(false);
   const [error, setError] = useState('');
   const [selectedModel, setSelectedModel] = useState('mock');
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const bottomRef = useRef(null);
   const textareaRef = useRef(null);
   const fileRef = useRef(null);
+
+  const showEmpty = !loadingChat && (!active || !active.messages?.length);
 
   const loadConversations = useCallback(async () => {
     const { data } = await client.get('/chat/conversations');
@@ -52,6 +71,7 @@ export default function Chat() {
   const openConversation = useCallback(async (id) => {
     setLoadingChat(true);
     setError('');
+    setSidebarOpen(false);
     try {
       const { data } = await client.get(`/chat/conversations/${id}`);
       setActiveId(id);
@@ -79,9 +99,8 @@ export default function Chat() {
           modelRes.data.find((m) => m.available)?.id ||
           'mock';
         setSelectedModel(preferred);
-        if (list.length) {
-          await openConversation(list[0].id);
-        }
+        // Land on empty “Ready when you are” screen like ChatGPT (don’t auto-open a thread).
+        void list;
       } catch (err) {
         if (!cancelled) setError(errorMessage(err));
       } finally {
@@ -91,28 +110,27 @@ export default function Chat() {
     return () => {
       cancelled = true;
     };
-  }, [loadConversations, openConversation]);
+  }, [loadConversations]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
   }, [active?.messages, busy]);
 
+  useEffect(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = '0px';
+    el.style.height = `${Math.min(el.scrollHeight, 160)}px`;
+  }, [draft]);
+
   const startNewChat = async () => {
-    setBusy(true);
+    setActiveId(null);
+    setActive(null);
+    setDraft('');
+    setFile(null);
     setError('');
-    try {
-      const { data } = await client.post('/chat/conversations', { model: selectedModel });
-      await loadConversations();
-      setActiveId(data.id);
-      setActive(data);
-      setDraft('');
-      setFile(null);
-      textareaRef.current?.focus();
-    } catch (err) {
-      setError(errorMessage(err));
-    } finally {
-      setBusy(false);
-    }
+    setSidebarOpen(false);
+    textareaRef.current?.focus();
   };
 
   const changeModel = async (model) => {
@@ -133,11 +151,9 @@ export default function Chat() {
       await client.delete(`/chat/conversations/${id}`);
       const list = await loadConversations();
       if (activeId === id) {
-        if (list.length) await openConversation(list[0].id);
-        else {
-          setActiveId(null);
-          setActive(null);
-        }
+        setActiveId(null);
+        setActive(null);
+        if (list.length === 0) setActive(null);
       }
     } catch (err) {
       setError(errorMessage(err));
@@ -203,10 +219,7 @@ export default function Chat() {
         const form = new FormData();
         form.append('content', content);
         form.append('file', attached);
-        const response = await client.post(
-          `/chat/conversations/${conversationId}/upload`,
-          form
-        );
+        const response = await client.post(`/chat/conversations/${conversationId}/upload`, form);
         data = response.data;
       } else {
         const response = await client.post(`/chat/conversations/${conversationId}/messages`, { content });
@@ -231,32 +244,112 @@ export default function Chat() {
     }
   };
 
+  const composer = (
+    <form className={`chat-composer-pill${showEmpty ? ' chat-composer-pill-hero' : ''}`} onSubmit={sendMessage}>
+      <input
+        ref={fileRef}
+        type="file"
+        accept=".pdf,image/png,image/jpeg,image/jpg,image/webp,image/gif,application/pdf"
+        hidden
+        onChange={onFileChange}
+      />
+      <button
+        type="button"
+        className="chat-pill-attach"
+        disabled={busy}
+        onClick={() => fileRef.current?.click()}
+        title="Attach PDF or image"
+        aria-label="Attach PDF or image"
+      >
+        +
+      </button>
+      <div className="chat-composer-main">
+        {file && (
+          <div className="chat-file-preview">
+            <span>
+              {/\.pdf$/i.test(file.name) ? '📄' : '🖼️'} {file.name}
+            </span>
+            <button
+              type="button"
+              onClick={() => {
+                setFile(null);
+                if (fileRef.current) fileRef.current.value = '';
+              }}
+            >
+              ×
+            </button>
+          </div>
+        )}
+        <textarea
+          ref={textareaRef}
+          rows={1}
+          placeholder="Ask anything"
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={onKeyDown}
+          disabled={busy}
+        />
+      </div>
+      <button
+        type="submit"
+        className="chat-pill-send"
+        disabled={busy || (!draft.trim() && !file)}
+        aria-label="Send message"
+      >
+        {busy ? '…' : '↑'}
+      </button>
+    </form>
+  );
+
   return (
-    <div className="chat-shell">
+    <div className={`chat-shell${sidebarOpen ? ' sidebar-open' : ''}`}>
+      <button
+        type="button"
+        className="chat-sidebar-backdrop"
+        aria-label="Close sidebar"
+        onClick={() => setSidebarOpen(false)}
+      />
+
       <aside className="chat-sidebar">
         <div className="chat-sidebar-top">
-          <Button className="primary-button w-100" onClick={startNewChat} disabled={busy}>
-            + New chat
-          </Button>
+          <button type="button" className="chat-new-btn" onClick={startNewChat} disabled={busy}>
+            <span aria-hidden="true">✎</span> New chat
+          </button>
+          <nav className="chat-side-nav" aria-label="Quick links">
+            <Link className="chat-side-link" to="/generate" onClick={() => setSidebarOpen(false)}>
+              <span aria-hidden="true">✦</span> Create draft
+            </Link>
+            <Link className="chat-side-link" to="/history" onClick={() => setSidebarOpen(false)}>
+              <span aria-hidden="true">▤</span> Library
+            </Link>
+            <Link className="chat-side-link" to="/plagiarism" onClick={() => setSidebarOpen(false)}>
+              <span aria-hidden="true">✓</span> Originality
+            </Link>
+            <Link className="chat-side-link" to="/chapters" onClick={() => setSidebarOpen(false)}>
+              <span aria-hidden="true">◉</span> Summarize
+            </Link>
+          </nav>
         </div>
+
         <div className="chat-sidebar-list">
+          <p className="chat-recents-label">Recents</p>
           {loadingList ? (
             <div className="chat-sidebar-empty">
               <Spinner size="sm" animation="border" />
             </div>
           ) : conversations.length === 0 ? (
-            <div className="chat-sidebar-empty">No chats yet. Start one.</div>
+            <div className="chat-sidebar-empty">No chats yet</div>
           ) : (
             conversations.map((item) => (
               <button
                 type="button"
                 key={item.id}
-                className={`chat-thread ${activeId === item.id ? 'active' : ''}`}
+                className={`chat-thread${activeId === item.id ? ' active' : ''}`}
                 onClick={() => openConversation(item.id)}
               >
                 <span className="chat-thread-title">{item.title}</span>
                 <span className="chat-thread-meta">
-                  {item.model}
+                  <span>{item.model}</span>
                   <button
                     type="button"
                     className="chat-thread-delete"
@@ -270,56 +363,83 @@ export default function Chat() {
             ))
           )}
         </div>
+
+        <div className="chat-sidebar-user">
+          <span className="chat-user-avatar" aria-hidden="true">
+            {initials(user?.name)}
+          </span>
+          <div className="chat-user-meta">
+            <strong>{user?.name || 'WordWise user'}</strong>
+            <span>{user?.subscriptionPlan || 'FREE'}</span>
+          </div>
+          {user?.subscriptionPlan !== 'PRO' && (
+            <Link className="chat-claim-btn" to="/pricing" onClick={() => setSidebarOpen(false)}>
+              Upgrade
+            </Link>
+          )}
+        </div>
       </aside>
 
       <section className="chat-main">
         <header className="chat-toolbar">
-          <div>
-            <p className="eyebrow">CHAT</p>
-            <h1>{active?.title || 'Ask anything'}</h1>
+          <div className="chat-toolbar-left">
+            <button
+              type="button"
+              className="chat-menu-toggle"
+              aria-label="Open sidebar"
+              onClick={() => setSidebarOpen(true)}
+            >
+              ☰
+            </button>
+            <div className="chat-brand-chip">
+              <span>WordWise</span>
+              <Form.Select
+                className="chat-model-select"
+                value={selectedModel}
+                onChange={(e) => changeModel(e.target.value)}
+                aria-label="Choose AI model"
+              >
+                {(models.length ? models : [{ id: 'mock', label: 'Demo (offline)', available: true }]).map(
+                  (model) => (
+                    <option
+                      key={model.id}
+                      value={model.id}
+                      disabled={!model.available && model.id !== selectedModel}
+                    >
+                      {model.label}
+                      {!model.available ? ' (key missing)' : ''}
+                    </option>
+                  )
+                )}
+              </Form.Select>
+            </div>
           </div>
-          <Form.Select
-            className="chat-model-select"
-            value={selectedModel}
-            onChange={(e) => changeModel(e.target.value)}
-            aria-label="Choose AI model"
-          >
-            {(models.length ? models : [{ id: 'mock', label: 'Demo (offline)', available: true }]).map(
-              (model) => (
-                <option key={model.id} value={model.id} disabled={!model.available && model.id !== selectedModel}>
-                  {model.label}
-                  {!model.available ? ' (key missing)' : ''}
-                </option>
-              )
-            )}
-          </Form.Select>
+          {!showEmpty && <p className="chat-active-title">{active?.title}</p>}
         </header>
 
-        <div className="chat-messages">
+        <div className={`chat-messages${showEmpty ? ' chat-messages-empty' : ''}`}>
           {loadingChat ? (
             <div className="chat-empty">
               <Spinner animation="border" />
             </div>
-          ) : !active || !active.messages?.length ? (
-            <div className="chat-empty">
-              <h2>How can I help you today?</h2>
-              <p>Ask a question, upload a PDF or image, or continue a chat from the left.</p>
+          ) : showEmpty ? (
+            <div className="chat-empty chat-empty-hero">
+              <h2>Ready when you are.</h2>
+              <div className="chat-hero-composer">{composer}</div>
               <div className="chat-suggestions">
-                {['Explain photosynthesis simply', 'Summarize this PDF', 'What is in this image?'].map(
-                  (suggestion) => (
-                    <button
-                      type="button"
-                      key={suggestion}
-                      className="chat-suggestion"
-                      onClick={() => {
-                        setDraft(suggestion);
-                        textareaRef.current?.focus();
-                      }}
-                    >
-                      {suggestion}
-                    </button>
-                  )
-                )}
+                {SUGGESTIONS.map((suggestion) => (
+                  <button
+                    type="button"
+                    key={suggestion.label}
+                    className="chat-suggestion"
+                    onClick={() => {
+                      setDraft(suggestion.prompt);
+                      textareaRef.current?.focus();
+                    }}
+                  >
+                    {suggestion.label}
+                  </button>
+                ))}
               </div>
             </div>
           ) : (
@@ -354,13 +474,11 @@ export default function Chat() {
               );
             })
           )}
-          {busy && (
+          {busy && !showEmpty && (
             <article className="chat-bubble-row assistant">
               <div className="chat-bubble thinking">
                 <div className="chat-bubble-role">WordWise</div>
-                <div className="chat-bubble-text">
-                  {file || draft ? 'Reading your file…' : 'Thinking…'}
-                </div>
+                <div className="chat-bubble-text">Thinking…</div>
               </div>
             </article>
           )}
@@ -369,48 +487,12 @@ export default function Chat() {
 
         {error && <div className="chat-error">{error}</div>}
 
-        <form className="chat-composer" onSubmit={sendMessage}>
-          <input
-            ref={fileRef}
-            type="file"
-            accept=".pdf,image/png,image/jpeg,image/jpg,image/webp,image/gif,application/pdf"
-            hidden
-            onChange={onFileChange}
-          />
-          <button
-            type="button"
-            className="chat-attach-btn"
-            disabled={busy}
-            onClick={() => fileRef.current?.click()}
-            title="Attach PDF or image"
-            aria-label="Attach PDF or image"
-          >
-            +
-          </button>
-          <div className="chat-composer-main">
-            {file && (
-              <div className="chat-file-preview">
-                <span>{/\.pdf$/i.test(file.name) ? '📄' : '🖼️'} {file.name}</span>
-                <button type="button" onClick={() => { setFile(null); if (fileRef.current) fileRef.current.value = ''; }}>
-                  ×
-                </button>
-              </div>
-            )}
-            <textarea
-              ref={textareaRef}
-              rows={1}
-              placeholder="Message WordWise… or attach a PDF/image"
-              value={draft}
-              onChange={(e) => setDraft(e.target.value)}
-              onKeyDown={onKeyDown}
-              disabled={busy}
-            />
+        {!showEmpty && (
+          <div className="chat-composer-dock">
+            {composer}
+            <p className="chat-hint">PDF & images up to 10MB · Enter to send · Shift+Enter for a new line</p>
           </div>
-          <Button type="submit" className="primary-button" disabled={busy || (!draft.trim() && !file)}>
-            Send
-          </Button>
-        </form>
-        <p className="chat-hint">PDF & images up to 10MB · Enter to send · Shift+Enter for a new line</p>
+        )}
       </section>
     </div>
   );

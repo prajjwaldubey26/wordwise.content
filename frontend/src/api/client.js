@@ -22,8 +22,15 @@ client.interceptors.request.use((config) => {
   return config;
 });
 client.interceptors.response.use((response) => response, (error) => {
-  if (error.response?.status === 401 && !window.location.pathname.startsWith('/login')) {
-    localStorage.removeItem('token'); localStorage.removeItem('user'); window.location.assign('/login');
+  const status = error.response?.status;
+  // Expired/missing JWT often surfaces as 401; some hosts still return 403 for anonymous access.
+  if ((status === 401 || status === 403) && !window.location.pathname.startsWith('/login')) {
+    const hadToken = Boolean(localStorage.getItem('token'));
+    if (status === 401 || hadToken) {
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      window.location.assign('/login');
+    }
   }
   return Promise.reject(error);
 });
