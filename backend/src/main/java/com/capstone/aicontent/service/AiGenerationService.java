@@ -23,6 +23,16 @@ import java.util.regex.Pattern;
 @Service
 public class AiGenerationService {
 
+private static final String CHAT_SYSTEM_PROMPT = """
+        You are WordWise, a helpful AI writing and study coach.
+        Answer like ChatGPT: clear, natural, specific to the user's question, and useful.
+        Prefer plain text. Do not wrap titles in markdown asterisks or hashtags.
+        Structure longer answers with a short direct answer first, then brief sections or numbered steps when helpful.
+        Use concrete examples when they improve understanding.
+        If the user attaches a PDF or image transcript, use that content carefully and say what you inferred.
+        If something is uncertain, say so briefly and ask one focused follow-up.
+        Keep a warm, professional tone. Avoid filler phrases and generic advice that ignores the question.
+        """;
 
 private final String provider;
 private final String openAiKey;
@@ -141,7 +151,26 @@ public List<QuizQuestion> quiz(String extractedText) {
 }
 
 public String chat(List<Map<String, String>> messages, String preferredModel) {
-    String response = callProvider(messages, preferredModel);
+    List<Map<String, String>> withSystem = withChatSystemPrompt(messages);
+    String selected = preferredModel == null || preferredModel.isBlank()
+            ? defaultChatModel()
+            : preferredModel.toLowerCase(Locale.ROOT);
+
+    // "mock" is offline demo only — use a live model automatically when a key exists.
+    if ("mock".equals(selected)) {
+        String live = firstAvailableLiveModel(null);
+        if (live != null) {
+            selected = live;
+        }
+    }
+
+    String response = callProvider(withSystem, selected);
+    if (response == null || response.isBlank()) {
+        String fallbackModel = firstAvailableLiveModel(selected);
+        if (fallbackModel != null && !fallbackModel.equals(selected)) {
+            response = callProvider(withSystem, fallbackModel);
+        }
+    }
     if (response == null || response.isBlank()) {
         String lastUser = messages.stream()
                 .filter(m -> "user".equalsIgnoreCase(m.get("role")))
@@ -150,7 +179,43 @@ public String chat(List<Map<String, String>> messages, String preferredModel) {
                 .orElse("your question");
         return mockChatReply(lastUser);
     }
-    return response.trim();
+    return stripMarkdownMarkers(response.trim());
+}
+
+private List<Map<String, String>> withChatSystemPrompt(List<Map<String, String>> messages) {
+    List<Map<String, String>> payload = new ArrayList<>();
+    payload.add(Map.of("role", "system", "content", CHAT_SYSTEM_PROMPT));
+    if (messages != null) {
+        for (Map<String, String> message : messages) {
+            if (message == null) continue;
+            String role = message.getOrDefault("role", "user");
+            if ("system".equalsIgnoreCase(role)) continue;
+            payload.add(Map.of(
+                    "role", role,
+                    "content", message.getOrDefault("content", "")
+            ));
+        }
+    }
+    return payload;
+}
+
+private String firstAvailableLiveModel(String preferredModel) {
+    String preferred = preferredModel == null ? "" : preferredModel.toLowerCase(Locale.ROOT);
+    List<String> order = new ArrayList<>();
+    if (!preferred.isBlank() && !"mock".equals(preferred)) {
+        order.add(preferred);
+    }
+    for (String candidate : List.of("openai", "nvidia", "anthropic")) {
+        if (!order.contains(candidate)) {
+            order.add(candidate);
+        }
+    }
+    for (String candidate : order) {
+        if ("openai".equals(candidate) && !openAiKey.isBlank()) return "openai";
+        if ("nvidia".equals(candidate) && !nvidiaKey.isBlank()) return "nvidia";
+        if ("anthropic".equals(candidate) && !anthropicKey.isBlank()) return "anthropic";
+    }
+    return null;
 }
 
 public String describeImage(byte[] imageBytes, String mimeType, String preferredModel) {
@@ -279,8 +344,8 @@ private String callAnthropicVision(String prompt, byte[] imageBytes, String medi
 public List<Map<String, Object>> availableChatModels() {
     List<Map<String, Object>> models = new ArrayList<>();
     models.add(Map.of("id", "mock", "label", "Demo (offline)", "available", true));
-    models.add(Map.of("id", "nvidia", "label", "NVIDIA", "available", !nvidiaKey.isBlank()));
     models.add(Map.of("id", "openai", "label", "ChatGPT (OpenAI)", "available", !openAiKey.isBlank()));
+    models.add(Map.of("id", "nvidia", "label", "NVIDIA Llama", "available", !nvidiaKey.isBlank()));
     models.add(Map.of("id", "anthropic", "label", "Claude (Anthropic)", "available", !anthropicKey.isBlank()));
     return models;
 }
@@ -354,12 +419,11 @@ private String callOpenAiCompatible(
             ))
             .toList();
 
-    Map<String, Object> body = Map.of(
-            "model", model,
-            "messages", payloadMessages,
-            "temperature", 0.55,
-            "max_tokens", 1024
-    );
+    Map<String, Object> body = new HashMap<>();
+    body.put("model", model);
+    body.put("messages", payloadMessages);
+    body.put("temperature", 0.7);
+    body.put("max_tokens", 1800);
 
     Map<String, Object> response = http.postForObject(
             endpoint,
@@ -396,6 +460,13 @@ private String callAnthropic(List<Map<String, String>> messages) {
     headers.set("anthropic-version", "2023-06-01");
     headers.setContentType(MediaType.APPLICATION_JSON);
 
+    String system = messages.stream()
+            .filter(m -> "system".equalsIgnoreCase(m.getOrDefault("role", "")))
+            .map(m -> m.getOrDefault("content", ""))
+            .filter(content -> !content.isBlank())
+            .findFirst()
+            .orElse("");
+
     List<Map<String, String>> payloadMessages = messages.stream()
             .filter(m -> {
                 String role = m.getOrDefault("role", "user");
@@ -407,11 +478,14 @@ private String callAnthropic(List<Map<String, String>> messages) {
             ))
             .toList();
 
-    Map<String, Object> body = Map.of(
-            "model", anthropicModel,
-            "max_tokens", 1400,
-            "messages", payloadMessages
-    );
+    Map<String, Object> body = new HashMap<>();
+    body.put("model", anthropicModel);
+    body.put("max_tokens", 1800);
+    body.put("temperature", 0.7);
+    body.put("messages", payloadMessages);
+    if (!system.isBlank()) {
+        body.put("system", system);
+    }
 
     Map<String, Object> response = http.postForObject(
             "https://api.anthropic.com/v1/messages",
@@ -434,17 +508,66 @@ private String callAnthropic(List<Map<String, String>> messages) {
 }
 
 private String mockChatReply(String question) {
-    String topic = question == null || question.isBlank() ? "that" : question.trim();
-    if (topic.length() > 120) {
-        topic = topic.substring(0, 117) + "...";
+    String raw = question == null ? "" : question.trim();
+    String lower = raw.toLowerCase(Locale.ROOT);
+    String topic = raw.isBlank() ? "your question" : raw;
+    if (topic.length() > 160) {
+        topic = topic.substring(0, 157) + "...";
     }
-    return "Here's a clear take on \"" + topic + "\".\n\n"
-            + "The short answer is that it depends on your goal, but a good approach is to start with the basics, "
-            + "then build up with a few practical steps.\n\n"
-            + "1. Clarify what you want to achieve.\n"
-            + "2. Break the problem into smaller parts.\n"
-            + "3. Use one simple example to check your understanding.\n\n"
-            + "If you want, ask a follow-up and I can go deeper on any part.";
+
+    if (lower.contains("--- begin attached")) {
+        return "I read the attached file content you shared.\n\n"
+                + "Here is a practical summary:\n"
+                + "1. Identify the main topic and purpose of the document.\n"
+                + "2. Pull out the key claims, definitions, or steps.\n"
+                + "3. Note any examples, formulas, or conclusions that matter most.\n\n"
+                + "Ask me to explain any section in simpler language, turn it into notes, "
+                + "or quiz you on it, and I will go deeper.";
+    }
+
+    if (lower.startsWith("what is") || lower.startsWith("what's") || lower.startsWith("define") || lower.contains("explain")) {
+        return "Here is a clear explanation of " + topic + ".\n\n"
+                + "In plain terms, it is the idea or process you asked about, described so a student can use it right away.\n\n"
+                + "Why it matters:\n"
+                + "- It helps you understand the core concept before details pile up.\n"
+                + "- It gives you language you can reuse in notes, essays, or exams.\n\n"
+                + "A simple way to remember it:\n"
+                + "1. State the definition in one sentence.\n"
+                + "2. Add one real-world example.\n"
+                + "3. Connect it to a related idea you already know.\n\n"
+                + "If you want, tell me your level (beginner/intermediate) and I will tailor the depth.";
+    }
+
+    if (lower.startsWith("how to") || lower.startsWith("how do") || lower.contains("steps")) {
+        return "Here is a practical plan for " + topic + ".\n\n"
+                + "1. Clarify the outcome you want in one sentence.\n"
+                + "2. Gather the minimum information or materials you need.\n"
+                + "3. Do the first small step that creates visible progress.\n"
+                + "4. Check the result, then adjust before moving on.\n"
+                + "5. Repeat until the draft, solution, or answer feels solid.\n\n"
+                + "Common mistake to avoid: jumping to advanced details before the basics are clear.\n\n"
+                + "Tell me where you are stuck and I will give the next exact step.";
+    }
+
+    if (lower.contains("code") || lower.contains("program") || lower.contains("java") || lower.contains("python")) {
+        return "Here is a practical coding-focused answer for " + topic + ".\n\n"
+                + "Approach:\n"
+                + "1. Restate the problem in your own words.\n"
+                + "2. Break it into inputs, process, and expected output.\n"
+                + "3. Write the simplest working version first.\n"
+                + "4. Test with one normal case and one edge case.\n"
+                + "5. Then clean names, structure, and comments.\n\n"
+                + "If you paste your current code or error message, I can debug it line by line.";
+    }
+
+    return "Here is a direct answer to: " + topic + "\n\n"
+            + "Start with the core point: focus on what the question is really asking, then support it with a short explanation and one example.\n\n"
+            + "Useful structure:\n"
+            + "1. Direct answer in 1-2 sentences.\n"
+            + "2. Why that answer makes sense.\n"
+            + "3. One example or application.\n"
+            + "4. A quick check so you know you understood it.\n\n"
+            + "I can go deeper, rewrite this for an exam, or turn it into a short essay draft — tell me which you want.";
 }
 
 private List<QuizQuestion> parseQuiz(String json) {
