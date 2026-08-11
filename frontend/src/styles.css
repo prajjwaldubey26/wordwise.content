@@ -96,6 +96,53 @@ a:hover { color: var(--deep); }
   letter-spacing: 0.02em;
 }
 
+.user-avatar-btn {
+  border: 0;
+  cursor: pointer;
+  padding: 0;
+  transition: transform 0.15s ease;
+}
+.user-avatar-btn:active { transform: scale(0.97); }
+
+.topbar-account-wrap {
+  position: relative;
+}
+
+.topbar-account-menu {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  z-index: 40;
+  width: min(280px, calc(100vw - 32px));
+  background: #fff;
+  border-radius: 16px;
+  box-shadow: 0 16px 40px rgba(31, 41, 55, 0.16);
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.topbar-account-menu button {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  width: 100%;
+  border: 0;
+  background: transparent;
+  border-radius: 12px;
+  padding: 10px 12px;
+  text-align: left;
+  color: var(--ink);
+  font-size: 0.88rem;
+  font-weight: 500;
+  cursor: pointer;
+}
+.topbar-account-menu button:hover {
+  background: var(--green-soft);
+  color: var(--deep);
+}
+
 .notif-btn {
   position: relative;
   background: #fff;
@@ -1159,14 +1206,25 @@ a:hover { color: var(--deep); }
 }
 .chat-thread-delete:hover { opacity: 1; color: #C23B55; }
 
+.chat-sidebar-user-wrap {
+  position: relative;
+  border-top: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.55);
+}
+
 .chat-sidebar-user {
   display: flex;
   align-items: center;
   gap: 10px;
+  width: 100%;
   padding: 12px;
-  border-top: 1px solid var(--line);
-  background: rgba(255, 255, 255, 0.55);
+  border: 0;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  min-height: 56px;
 }
+.chat-sidebar-user:hover { background: rgba(61, 190, 108, 0.08); }
 
 .chat-user-avatar {
   display: grid;
@@ -1193,11 +1251,82 @@ a:hover { color: var(--deep); }
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  color: var(--ink);
 }
 .chat-user-meta span {
   font-size: 0.68rem;
   color: var(--muted);
   font-weight: 600;
+}
+
+.chat-user-caret {
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+.chat-account-menu {
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  bottom: calc(100% + 8px);
+  z-index: 30;
+  background: #fff;
+  border-radius: 16px;
+  box-shadow: 0 16px 40px rgba(31, 41, 55, 0.16);
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.chat-account-menu-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 10px 12px;
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 4px;
+}
+.chat-account-menu-head strong {
+  display: block;
+  font-size: 0.88rem;
+  color: var(--ink);
+}
+.chat-account-menu-head p {
+  margin: 2px 0 0;
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+
+.chat-account-menu button,
+.chat-account-menu a {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  width: 100%;
+  border: 0;
+  background: transparent;
+  border-radius: 12px;
+  padding: 10px 12px;
+  text-align: left;
+  color: var(--ink);
+  font-size: 0.88rem;
+  font-weight: 500;
+  text-decoration: none;
+  cursor: pointer;
+}
+.chat-account-menu button:hover,
+.chat-account-menu a:hover {
+  background: var(--green-soft);
+  color: var(--deep);
+}
+
+.chat-account-logout {
+  color: #9B3B3B !important;
+}
+.chat-account-logout:hover {
+  background: var(--peach) !important;
+  color: #9B3B3B !important;
 }
 
 .chat-claim-btn {

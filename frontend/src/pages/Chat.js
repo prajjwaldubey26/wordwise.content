@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Form, Spinner } from 'react-bootstrap';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import client, { errorMessage } from '../api/client';
 import FormattedContent from '../components/FormattedContent';
 import { useAuth } from '../context/AuthContext';
@@ -43,7 +43,8 @@ function initials(name = '') {
 }
 
 export default function Chat() {
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
+  const navigate = useNavigate();
   const [conversations, setConversations] = useState([]);
   const [models, setModels] = useState([]);
   const [activeId, setActiveId] = useState(null);
@@ -56,9 +57,11 @@ export default function Chat() {
   const [error, setError] = useState('');
   const [selectedModel, setSelectedModel] = useState('mock');
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [accountMenuOpen, setAccountMenuOpen] = useState(false);
   const bottomRef = useRef(null);
   const textareaRef = useRef(null);
   const fileRef = useRef(null);
+  const accountMenuRef = useRef(null);
 
   const showEmpty = !loadingChat && (!active || !active.messages?.length);
 
@@ -117,11 +120,50 @@ export default function Chat() {
   }, [active?.messages, busy]);
 
   useEffect(() => {
+    if (!accountMenuOpen) return undefined;
+    const onPointerDown = (event) => {
+      if (!accountMenuRef.current?.contains(event.target)) {
+        setAccountMenuOpen(false);
+      }
+    };
+    const onKeyDown = (event) => {
+      if (event.key === 'Escape') setAccountMenuOpen(false);
+    };
+    document.addEventListener('mousedown', onPointerDown);
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', onPointerDown);
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [accountMenuOpen]);
+
+  useEffect(() => {
     const el = textareaRef.current;
     if (!el) return;
     el.style.height = '0px';
     el.style.height = `${Math.min(el.scrollHeight, 160)}px`;
   }, [draft]);
+
+  const goLogin = () => {
+    setAccountMenuOpen(false);
+    setSidebarOpen(false);
+    logout();
+    navigate('/login');
+  };
+
+  const goAddAccount = () => {
+    setAccountMenuOpen(false);
+    setSidebarOpen(false);
+    logout();
+    navigate('/register');
+  };
+
+  const goLogout = () => {
+    setAccountMenuOpen(false);
+    setSidebarOpen(false);
+    logout();
+    navigate('/login');
+  };
 
   const startNewChat = async () => {
     setActiveId(null);
@@ -364,18 +406,59 @@ export default function Chat() {
           )}
         </div>
 
-        <div className="chat-sidebar-user">
-          <span className="chat-user-avatar" aria-hidden="true">
-            {initials(user?.name)}
-          </span>
-          <div className="chat-user-meta">
-            <strong>{user?.name || 'WordWise user'}</strong>
-            <span>{user?.subscriptionPlan || 'FREE'}</span>
-          </div>
-          {user?.subscriptionPlan !== 'PRO' && (
-            <Link className="chat-claim-btn" to="/pricing" onClick={() => setSidebarOpen(false)}>
-              Upgrade
-            </Link>
+        <div className="chat-sidebar-user-wrap" ref={accountMenuRef}>
+          <button
+            type="button"
+            className="chat-sidebar-user"
+            aria-haspopup="menu"
+            aria-expanded={accountMenuOpen}
+            onClick={() => setAccountMenuOpen((open) => !open)}
+          >
+            <span className="chat-user-avatar" aria-hidden="true">
+              {initials(user?.name)}
+            </span>
+            <div className="chat-user-meta">
+              <strong>{user?.name || 'WordWise user'}</strong>
+              <span>{user?.subscriptionPlan || 'FREE'}</span>
+            </div>
+            <span className="chat-user-caret" aria-hidden="true">
+              ▾
+            </span>
+          </button>
+
+          {accountMenuOpen && (
+            <div className="chat-account-menu" role="menu">
+              <div className="chat-account-menu-head">
+                <span className="chat-user-avatar" aria-hidden="true">
+                  {initials(user?.name)}
+                </span>
+                <div>
+                  <strong>{user?.name || 'WordWise user'}</strong>
+                  <p>{user?.email || 'Signed in'}</p>
+                </div>
+              </div>
+              <button type="button" role="menuitem" onClick={goLogin}>
+                Log in with another account
+              </button>
+              <button type="button" role="menuitem" onClick={goAddAccount}>
+                Add a new account
+              </button>
+              {user?.subscriptionPlan !== 'PRO' && (
+                <Link
+                  role="menuitem"
+                  to="/pricing"
+                  onClick={() => {
+                    setAccountMenuOpen(false);
+                    setSidebarOpen(false);
+                  }}
+                >
+                  Upgrade to Pro
+                </Link>
+              )}
+              <button type="button" role="menuitem" className="chat-account-logout" onClick={goLogout}>
+                Log out
+              </button>
+            </div>
           )}
         </div>
       </aside>

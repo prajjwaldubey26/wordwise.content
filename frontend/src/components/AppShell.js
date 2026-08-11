@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Container, Offcanvas } from 'react-bootstrap';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import client from '../api/client';
@@ -37,7 +37,9 @@ export default function AppShell({ children }) {
   const { pathname } = useLocation();
   const isChat = pathname.startsWith('/chat');
   const [menuOpen, setMenuOpen] = useState(false);
+  const [accountMenuOpen, setAccountMenuOpen] = useState(false);
   const [notifCount, setNotifCount] = useState(0);
+  const accountMenuRef = useRef(null);
 
   useEffect(() => {
     let alive = true;
@@ -58,10 +60,36 @@ export default function AppShell({ children }) {
     };
   }, []);
 
+  useEffect(() => {
+    if (!accountMenuOpen) return undefined;
+    const onPointerDown = (event) => {
+      if (!accountMenuRef.current?.contains(event.target)) {
+        setAccountMenuOpen(false);
+      }
+    };
+    const onKeyDown = (event) => {
+      if (event.key === 'Escape') setAccountMenuOpen(false);
+    };
+    document.addEventListener('mousedown', onPointerDown);
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', onPointerDown);
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [accountMenuOpen]);
+
   const leave = () => {
     setMenuOpen(false);
+    setAccountMenuOpen(false);
     logout();
     navigate('/login');
+  };
+
+  const addAccount = () => {
+    setMenuOpen(false);
+    setAccountMenuOpen(false);
+    logout();
+    navigate('/register');
   };
 
   return (
@@ -85,9 +113,41 @@ export default function AppShell({ children }) {
             🔔
             {notifCount > 0 && <span className="notif-badge">{notifCount}</span>}
           </button>
-          <span className="user-avatar" title={user?.name || 'User'} aria-label={user?.name || 'User'}>
-            {initials(user?.name)}
-          </span>
+          <div className="topbar-account-wrap" ref={accountMenuRef}>
+            <button
+              type="button"
+              className="user-avatar user-avatar-btn"
+              title={user?.name || 'Account menu'}
+              aria-label="Open account menu"
+              aria-haspopup="menu"
+              aria-expanded={accountMenuOpen}
+              onClick={() => setAccountMenuOpen((open) => !open)}
+            >
+              {initials(user?.name)}
+            </button>
+            {accountMenuOpen && (
+              <div className="topbar-account-menu" role="menu">
+                <div className="chat-account-menu-head">
+                  <span className="chat-user-avatar" aria-hidden="true">
+                    {initials(user?.name)}
+                  </span>
+                  <div>
+                    <strong>{user?.name || 'WordWise user'}</strong>
+                    <p>{user?.email || 'Signed in'}</p>
+                  </div>
+                </div>
+                <button type="button" role="menuitem" onClick={leave}>
+                  Log in with another account
+                </button>
+                <button type="button" role="menuitem" onClick={addAccount}>
+                  Add a new account
+                </button>
+                <button type="button" role="menuitem" className="chat-account-logout" onClick={leave}>
+                  Log out
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </header>
 
@@ -114,6 +174,9 @@ export default function AppShell({ children }) {
             <p className="small text-muted mb-2 px-2">
               {user?.name} · {user?.subscriptionPlan || 'FREE'}
             </p>
+            <button type="button" className="app-drawer-link w-100 mb-2" onClick={addAccount}>
+              Add a new account
+            </button>
             <button type="button" className="app-drawer-logout" onClick={leave}>
               Log out
             </button>
